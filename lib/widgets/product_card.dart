@@ -16,6 +16,12 @@ class ProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 處理圖片URL，確保它是完整的URL
+    String imageUrl = product.thumb;
+    if (!imageUrl.startsWith('http')) {
+      imageUrl = 'https://ismartdemo.com.tw/image/' + imageUrl;
+    }
+
     return Card(
       elevation: 0,
       margin: const EdgeInsets.all(8),
@@ -26,7 +32,7 @@ class ProductCard extends StatelessWidget {
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: CachedNetworkImage(
-              imageUrl: product.thumb,
+              imageUrl: imageUrl,
               height: 150,
               width: double.infinity,
               fit: BoxFit.cover,

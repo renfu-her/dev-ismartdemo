@@ -110,7 +110,7 @@ class _BannerCarouselState extends State<BannerCarousel> {
                       fit: StackFit.expand,
                       children: [
                         CachedNetworkImage(
-                          imageUrl: widget.banners[index].image,
+                          imageUrl: _getFullImageUrl(widget.banners[index].image),
                           fit: BoxFit.cover,
                           placeholder: (context, url) => Container(
                             color: Colors.grey[200],
@@ -179,5 +179,13 @@ class _BannerCarouselState extends State<BannerCarousel> {
         ],
       ),
     );
+  }
+
+  // 處理圖片URL，確保它是完整的URL
+  String _getFullImageUrl(String imageUrl) {
+    if (!imageUrl.startsWith('http')) {
+      return 'https://ismartdemo.com.tw/image/' + imageUrl;
+    }
+    return imageUrl;
   }
 } 
