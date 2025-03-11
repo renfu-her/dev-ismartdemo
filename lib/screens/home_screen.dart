@@ -4,6 +4,8 @@ import '../models/banner.dart';
 import '../services/api_service.dart';
 import '../widgets/product_card.dart';
 import '../widgets/banner_carousel.dart';
+import '../utils/network_debug.dart';
+import '../config/app_config.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -124,6 +126,15 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.network_check, color: Colors.black),
+            onPressed: () {
+              // 從URL中提取主機名
+              final Uri uri = Uri.parse(AppConfig.appUrl);
+              final String host = uri.host;
+              NetworkDebug.showNetworkDiagnosticDialog(context, host);
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.notifications_none, color: Colors.black),
             onPressed: () {},
           ),
@@ -149,6 +160,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   ElevatedButton(
                     onPressed: _loadData,
                     child: const Text('重試'),
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: () {
+                      final Uri uri = Uri.parse(AppConfig.appUrl);
+                      final String host = uri.host;
+                      NetworkDebug.showNetworkDiagnosticDialog(context, host);
+                    },
+                    child: const Text('網絡診斷'),
                   ),
                 ],
               ),

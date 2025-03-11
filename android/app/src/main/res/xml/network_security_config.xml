@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- 允許所有明文流量 -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <!-- 信任系統預裝的CA證書 -->
+            <certificates src="system" />
+            <!-- 信任用戶添加的CA證書 -->
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+    
+    <!-- 特定域名的配置 -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">ismartdemo.com.tw</domain>
+        <!-- 如果您知道API服務器的IP地址，也可以添加 -->
+        <!-- <domain includeSubdomains="true">123.456.789.10</domain> -->
+    </domain-config>
+</network-security-config> 

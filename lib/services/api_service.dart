@@ -4,6 +4,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import '../config/app_config.dart';
 import '../models/product.dart';
 import '../models/banner.dart';
+import 'package:dio/io.dart'; // 添加這個導入以使用IOHttpClientAdapter
 
 class ApiService {
   late Dio _dio;
@@ -24,7 +25,28 @@ class ApiService {
       maxRedirects: 5,
     ));
     
+    // 設置代理（如果啟用）
+    if (AppConfig.useProxy) {
+      _dio.httpClientAdapter = IOHttpClientAdapter()
+        ..onHttpClientCreate = (client) {
+          client.findProxy = (uri) {
+            return 'PROXY ${AppConfig.proxyAddress}:${AppConfig.proxyPort}';
+          };
+          client.badCertificateCallback = (cert, host, port) => true;
+          return client;
+        };
+    }
+    
     // 添加攔截器用於日誌記錄和錯誤處理
+    _dio.interceptors.add(LogInterceptor(
+      request: true,
+      requestHeader: true,
+      requestBody: true,
+      responseHeader: true,
+      responseBody: true,
+      error: true,
+    ));
+    
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
         // 檢查網絡連接
@@ -133,6 +155,12 @@ class ApiService {
 
   // 獲取最新商品
   Future<List<Product>> getLatestProducts({int limit = 8}) async {
+    // 如果強制使用模擬數據，直接返回模擬數據
+    if (AppConfig.forceMockData == true) {
+      print('使用強制模擬數據');
+      return _getMockProducts();
+    }
+    
     try {
       final response = await _requestWithRetry(
         '${AppConfig.latestProductsEndpoint}&limit=$limit&api_key=${AppConfig.apiKey}',
@@ -156,6 +184,12 @@ class ApiService {
 
   // 獲取熱門商品
   Future<List<Product>> getPopularProducts({int limit = 8}) async {
+    // 如果強制使用模擬數據，直接返回模擬數據
+    if (AppConfig.forceMockData == true) {
+      print('使用強制模擬數據');
+      return _getMockProducts();
+    }
+    
     try {
       final response = await _requestWithRetry(
         '${AppConfig.popularProductsEndpoint}&limit=$limit&api_key=${AppConfig.apiKey}',
@@ -179,6 +213,12 @@ class ApiService {
 
   // 獲取首頁橫幅
   Future<List<HomeBanner>> getHomeBanners() async {
+    // 如果強制使用模擬數據，直接返回模擬數據
+    if (AppConfig.forceMockData == true) {
+      print('使用強制模擬數據');
+      return _getMockBanners();
+    }
+    
     try {
       final response = await _requestWithRetry(
         '${AppConfig.homeBannerEndpoint}&api_key=${AppConfig.apiKey}',
