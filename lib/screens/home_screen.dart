@@ -47,7 +47,7 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       setState(() {
         _isLoadingBanners = false;
-        _errorMessage = '無法載入橫幅: $e';
+        _errorMessage = e.toString().replaceAll('Exception: ', '');
       });
       print('Error loading banners: $e');
     }
@@ -74,7 +74,7 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (e) {
       setState(() {
         _isLoadingProducts = false;
-        _errorMessage = '無法載入產品: $e';
+        _errorMessage = e.toString().replaceAll('Exception: ', '');
       });
       print('Error loading products: $e');
     }

@@ -1,22 +1,49 @@
 import 'package:dio/dio.dart';
+import 'dart:io';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import '../config/app_config.dart';
 import '../models/product.dart';
 import '../models/banner.dart';
 
 class ApiService {
   late Dio _dio;
+  final int _maxRetries = 3;
 
   ApiService() {
     _dio = Dio(BaseOptions(
       baseUrl: AppConfig.appUrl,
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 10),
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 30),
+      // 添加以下設置以解決雷電模擬器的網絡問題
+      validateStatus: (status) {
+        return status != null && status < 500;
+      },
+      // 禁用HTTPS證書驗證（僅用於開發環境）
+      // 在生產環境中應該移除此設置
+      followRedirects: true,
+      maxRedirects: 5,
     ));
     
     // 添加攔截器用於日誌記錄和錯誤處理
     _dio.interceptors.add(InterceptorsWrapper(
-      onRequest: (options, handler) {
+      onRequest: (options, handler) async {
+        // 檢查網絡連接
+        if (!await _checkConnectivity()) {
+          return handler.reject(
+            DioException(
+              requestOptions: options,
+              error: '沒有網絡連接',
+              type: DioExceptionType.connectionError,
+            ),
+          );
+        }
+        
+        // 添加額外的請求頭
+        options.headers['User-Agent'] = 'Flutter/1.0';
+        options.headers['Accept'] = 'application/json';
+        
         print('REQUEST[${options.method}] => PATH: ${options.path}');
+        print('REQUEST HEADERS: ${options.headers}');
         return handler.next(options);
       },
       onResponse: (response, handler) {
@@ -25,15 +52,89 @@ class ApiService {
       },
       onError: (DioException e, handler) {
         print('ERROR[${e.response?.statusCode}] => PATH: ${e.requestOptions.path}');
+        print('ERROR DETAILS: ${e.message}');
+        print('ERROR TYPE: ${e.type}');
+        if (e.error is SocketException) {
+          print('SOCKET ERROR: ${(e.error as SocketException).message}');
+        }
         return handler.next(e);
       },
     ));
   }
 
+  // 處理API錯誤
+  String _handleApiError(dynamic error) {
+    if (error is SocketException) {
+      return '網絡連接錯誤: 請檢查您的網絡連接';
+    } else if (error is DioException) {
+      switch (error.type) {
+        case DioExceptionType.connectionTimeout:
+          return '連接超時: 伺服器響應時間過長';
+        case DioExceptionType.sendTimeout:
+          return '發送超時: 請檢查您的網絡連接';
+        case DioExceptionType.receiveTimeout:
+          return '接收超時: 請檢查您的網絡連接';
+        case DioExceptionType.badResponse:
+          return '伺服器錯誤: ${error.response?.statusCode} ${error.response?.statusMessage}';
+        case DioExceptionType.cancel:
+          return '請求已取消';
+        default:
+          return '網絡錯誤: ${error.message}';
+      }
+    }
+    return '未知錯誤: $error';
+  }
+  
+  // 帶重試功能的請求方法
+  Future<Response> _requestWithRetry(
+    String path, {
+    String method = 'GET',
+    Map<String, dynamic>? queryParameters,
+    dynamic data,
+    int retryCount = 0,
+  }) async {
+    try {
+      final options = Options(method: method);
+      final response = await _dio.request(
+        path,
+        queryParameters: queryParameters,
+        data: data,
+        options: options,
+      );
+      return response;
+    } catch (e) {
+      if (retryCount < _maxRetries && _shouldRetry(e)) {
+        print('Retry attempt ${retryCount + 1} for $path');
+        // 延遲重試，每次重試增加延遲時間
+        await Future.delayed(Duration(seconds: retryCount + 1));
+        return _requestWithRetry(
+          path,
+          method: method,
+          queryParameters: queryParameters,
+          data: data,
+          retryCount: retryCount + 1,
+        );
+      }
+      rethrow;
+    }
+  }
+  
+  // 判斷是否應該重試
+  bool _shouldRetry(dynamic error) {
+    if (error is DioException) {
+      return error.type == DioExceptionType.connectionTimeout ||
+          error.type == DioExceptionType.sendTimeout ||
+          error.type == DioExceptionType.receiveTimeout ||
+          error.type == DioExceptionType.connectionError ||
+          (error.error is SocketException);
+    }
+    return false;
+  }
+
   // 獲取最新商品
   Future<List<Product>> getLatestProducts({int limit = 8}) async {
     try {
-      final response = await _dio.get(
+      final response = await _requestWithRetry(
         '${AppConfig.latestProductsEndpoint}&limit=$limit&api_key=${AppConfig.apiKey}',
       );
       
@@ -45,18 +146,18 @@ class ApiService {
       }
     } catch (e) {
       print('Error getting latest products: $e');
-      // 在開發階段，返回一些模擬數據以便測試UI
-      if (AppConfig.appUrl.contains('example.com')) {
+      // 在開發階段或配置為使用模擬數據時，返回模擬數據
+      if (AppConfig.useMockDataOnError || AppConfig.appUrl.contains('example.com')) {
         return _getMockProducts();
       }
-      throw Exception('Failed to load latest products: $e');
+      throw Exception(_handleApiError(e));
     }
   }
 
   // 獲取熱門商品
   Future<List<Product>> getPopularProducts({int limit = 8}) async {
     try {
-      final response = await _dio.get(
+      final response = await _requestWithRetry(
         '${AppConfig.popularProductsEndpoint}&limit=$limit&api_key=${AppConfig.apiKey}',
       );
       
@@ -68,18 +169,18 @@ class ApiService {
       }
     } catch (e) {
       print('Error getting popular products: $e');
-      // 在開發階段，返回一些模擬數據以便測試UI
-      if (AppConfig.appUrl.contains('example.com')) {
+      // 在開發階段或配置為使用模擬數據時，返回模擬數據
+      if (AppConfig.useMockDataOnError || AppConfig.appUrl.contains('example.com')) {
         return _getMockProducts();
       }
-      throw Exception('Failed to load popular products: $e');
+      throw Exception(_handleApiError(e));
     }
   }
 
   // 獲取首頁橫幅
   Future<List<HomeBanner>> getHomeBanners() async {
     try {
-      final response = await _dio.get(
+      final response = await _requestWithRetry(
         '${AppConfig.homeBannerEndpoint}&api_key=${AppConfig.apiKey}',
       );
       
@@ -91,11 +192,11 @@ class ApiService {
       }
     } catch (e) {
       print('Error getting home banners: $e');
-      // 在開發階段，返回一些模擬數據以便測試UI
-      if (AppConfig.appUrl.contains('example.com')) {
+      // 在開發階段或配置為使用模擬數據時，返回模擬數據
+      if (AppConfig.useMockDataOnError || AppConfig.appUrl.contains('example.com')) {
         return _getMockBanners();
       }
-      throw Exception('Failed to load home banners: $e');
+      throw Exception(_handleApiError(e));
     }
   }
   
@@ -174,5 +275,16 @@ class ApiService {
         image: 'https://via.placeholder.com/800x400/33A8FF/FFFFFF?text=New+Arrivals',
       ),
     ];
+  }
+
+  // 檢查網絡連接
+  Future<bool> _checkConnectivity() async {
+    try {
+      final connectivityResult = await Connectivity().checkConnectivity();
+      return connectivityResult != ConnectivityResult.none;
+    } catch (e) {
+      print('Error checking connectivity: $e');
+      return true; // 如果無法檢查，假設有連接
+    }
   }
 } 
